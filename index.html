@@ -1,43 +1,4 @@
-<script type="text/javascript">
-        var gk_isXlsx = false;
-        var gk_xlsxFileLookup = {};
-        var gk_fileData = {};
-        function filledCell(cell) {
-          return cell !== '' && cell != null;
-        }
-        function loadFileData(filename) {
-        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
-            try {
-                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
-                var firstSheetName = workbook.SheetNames[0];
-                var worksheet = workbook.Sheets[firstSheetName];
-
-                // Convert sheet to JSON to filter blank rows
-                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
-                // Filter out blank rows (rows where all cells are empty, null, or undefined)
-                var filteredData = jsonData.filter(row => row.some(filledCell));
-
-                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
-                var headerRowIndex = filteredData.findIndex((row, index) =>
-                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
-                );
-                // Fallback
-                if (headerRowIndex === -1 || headerRowIndex > 25) {
-                  headerRowIndex = 0;
-                }
-
-                // Convert filtered JSON back to CSV
-                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
-                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
-                return csv;
-            } catch (e) {
-                console.error(e);
-                return "";
-            }
-        }
-        return gk_fileData[filename] || "";
-        }
-        </script><!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -70,8 +31,25 @@
     </header>
 
     <main class="container mx-auto p-6 max-w-3xl flex-grow">
+        <!-- قسم تسجيل الدخول -->
+        <section id="loginSection" class="bg-white rounded-2xl shadow-xl p-8 mb-8">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">تسجيل الدخول</h2>
+            <div class="space-y-4">
+                <div>
+                    <label for="loginUsername" class="block text-sm font-medium text-gray-700 mb-1">اسم المستخدم</label>
+                    <input type="text" id="loginUsername" required
+                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <button onclick="login()"
+                    class="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition duration-300 font-semibold">
+                    تسجيل الدخول
+                </button>
+                <p class="text-center text-sm text-gray-600">أو <a href="#" onclick="showCreateLink()" class="text-blue-600 hover:underline">أنشئ رابطك الخاص</a></p>
+            </div>
+        </section>
+
         <!-- قسم إنشاء الرابط -->
-        <section id="createLink" class="bg-white rounded-2xl shadow-xl p-8 mb-8">
+        <section id="createLink" class="bg-white rounded-2xl shadow-xl p-8 mb-8 hidden">
             <h2 class="text-xl font-semibold text-gray-800 mb-4">أنشئ رابطك الخاص</h2>
             <div class="space-y-4">
                 <div>
@@ -227,6 +205,10 @@
                 alert('يرجى إدخال اسم مستخدم');
                 return;
             }
+            if (!storageAvailable('localStorage')) {
+                alert('localStorage غير مدعوم في متصفحك');
+                return;
+            }
             currentUser = username;
             const baseUrl = window.location.origin + window.location.pathname;
             const link = `${baseUrl}?user=${encodeURIComponent(username)}`;
@@ -234,7 +216,9 @@
             const generatedLink = document.getElementById('generatedLink');
             generatedLink.value = link;
             linkContainer.classList.remove('hidden');
+            document.getElementById('createLink').classList.add('hidden');
             document.getElementById('viewMessages').classList.remove('hidden');
+            localStorage.setItem(`user_${username}`, JSON.stringify({ username }));
             loadMessages(username);
             requestNotificationPermission();
         }
@@ -307,14 +291,46 @@
             alert('تم إرسال الرد بنجاح!');
         }
 
+        // تسجيل الدخول
+        function login() {
+            const username = document.getElementById('loginUsername').value.trim();
+            if (!username) {
+                alert('يرجى إدخال اسم المستخدم');
+                return;
+            }
+            if (!storageAvailable('localStorage')) {
+                alert('localStorage غير مدعوم في متصفحك');
+                return;
+            }
+            const userData = JSON.parse(localStorage.getItem(`user_${username}`));
+            if (!userData) {
+                alert('اسم المستخدم غير موجود، حاول إنشاء رابط جديد');
+                return;
+            }
+            currentUser = username;
+            document.getElementById('loginSection').classList.add('hidden');
+            document.getElementById('viewMessages').classList.remove('hidden');
+            loadMessages(username);
+            requestNotificationPermission();
+        }
+
+        // إظهار قسم إنشاء الرابط
+        function showCreateLink() {
+            document.getElementById('loginSection').classList.add('hidden');
+            document.getElementById('createLink').classList.remove('hidden');
+        }
+
         // تحميل الصفحة
         window.onload = () => {
             const urlParams = new URLSearchParams(window.location.search);
             const username = urlParams.get('user');
             if (username) {
+                document.getElementById('loginSection').classList.add('hidden');
                 document.getElementById('createLink').classList.add('hidden');
                 document.getElementById('sendMessage').classList.remove('hidden');
                 loadEmojiPicker();
+            } else {
+                document.getElementById('loginSection').classList.remove('hidden');
             }
             requestNotificationPermission();
         };
